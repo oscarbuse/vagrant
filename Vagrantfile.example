@@ -1,0 +1,48 @@
+servers=[
+  {
+    :hostname => "ubuntu_host",
+    :ip => "192.168.33.11",
+    :os => "Ubuntu",
+    :ram => 1024,
+    :user => "ubuntu",
+    :box => "ubuntu/xenial64"
+  },
+  {
+    :hostname => "centos7_host",
+    :ip => "192.168.33.12",
+    :os => "CentOS",
+    :ram => 1024,
+    :user => "vagrant",
+    :box => "centos/7"
+  }
+]
+
+# Runs the role against three machines
+Vagrant.configure("2") do |config|
+  servers.each do |machine|
+    config.vm.define machine[:hostname] do |node|
+      node.vm.box = machine[:box]
+      node.vm.hostname = machine[:hostname]
+      node.vm.network "private_network", ip: machine[:ip]
+      node.vm.provider "virtualbox" do |vb|
+        vb.customize ["modifyvm", :id, "--memory", machine[:ram]]
+      end
+      node.vm.provision "file", source: "~/.ssh/id_rsa.pub", destination: "/tmp/key.pub"
+      node.vm.provision "shell", inline: "cat /tmp/key.pub >> /home/#{machine[:user]}/.ssh/authorized_keys"
+      node.vm.provision "shell", inline: "rm /tmp/key.pub"
+      # packages for Ansible clients
+      if machine[:os] == "Ubuntu"
+        node.vm.provision "shell", inline: <<-SHELL
+          sudo apt-get update
+          sudo apt-get install -y python python-simplejson
+        SHELL
+      end
+      if machine[:os] == "CentOS"
+        node.vm.provision "shell", inline: <<-SHELL
+          sudo yum install -y epel-release
+          sudo yum install -y python2-simplejson
+        SHELL
+      end
+    end
+  end
+end
